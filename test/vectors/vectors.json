@@ -1,0 +1,478 @@
+{
+  "version": 1,
+  "notes": "Golden vectors — every implementation (TS reference + all SDKs) must pass all cases. `compare` expects sign of compare(a,b); harnesses must also assert compare(b,a) === -expect. `evaluate` cases: config = top-level replacement of `patch` keys over `base_config` (no deep merge); `expect` is a subset match — listed fields must equal, extra fields in the actual decision are allowed. `config_source` covers the fail-open state machine. Adding a vector is feat:, changing one is an ADR.",
+  "base_config": {
+    "v": 1,
+    "app": "app_test",
+    "env": "production",
+    "published_at": "2026-01-01T00:00:00Z",
+    "key_id": "k1",
+    "kill": {
+      "active": false,
+      "platforms": [],
+      "version_ranges": [],
+      "message_key": "kill_default"
+    },
+    "maintenance": {
+      "active": false,
+      "starts_at": null,
+      "ends_at": null,
+      "message_key": "maint_default",
+      "show_eta": true
+    },
+    "update": {
+      "ios": {
+        "min": "3.2.0",
+        "target": "3.4.1",
+        "store_url": "https://store.example/ios",
+        "soft": { "max_snoozes": 3, "cooldown_hours": 24 }
+      },
+      "android": {
+        "min": "3.1.0",
+        "target": "3.4.0",
+        "store_url": "https://store.example/android",
+        "use_play_in_app_updates": true,
+        "soft": { "max_snoozes": 3, "cooldown_hours": 24 }
+      }
+    },
+    "values": {
+      "checkout_enabled": true,
+      "support_email": "help@acme.com",
+      "search_min_chars": 2,
+      "price_multiplier": 1.25,
+      "home_layout": { "sections": ["hero", "deals"], "columns": 2 }
+    },
+    "messages": {
+      "en": {
+        "kill_default": "App unavailable",
+        "maint_default": "Down for maintenance",
+        "force_title": "Update required",
+        "force_body": "Please update",
+        "soft_title": "Update available",
+        "soft_body": "A new version is ready"
+      },
+      "tr": { "force_title": "Güncelleme gerekli" }
+    }
+  },
+  "compare": [
+    { "a": "1.2.3", "b": "1.2.3", "expect": 0 },
+    { "a": "1.2", "b": "1.2.0", "expect": 0 },
+    { "a": "1.0", "b": "1", "expect": 0 },
+    { "a": "1.2.3+45", "b": "1.2.3", "expect": 0 },
+    { "a": "1.2.3+45", "b": "1.2.3+99", "expect": 0 },
+    { "a": "1.0.0+exp.sha.5114f85", "b": "1.0.0", "expect": 0 },
+    { "a": "01.002.0003", "b": "1.2.3", "expect": 0 },
+    { "a": "1.2.3.0", "b": "1.2.3", "expect": 0 },
+    { "a": "1.2.3-rc.1+build", "b": "1.2.3-rc.1", "expect": 0 },
+    { "a": "3.0.0-rc.1", "b": "3.0.0-rc.1", "expect": 0 },
+    { "a": "2.0.0", "b": "1.9.9", "expect": 1 },
+    { "a": "1.10.0", "b": "1.9.0", "expect": 1 },
+    { "a": "0.0.1", "b": "0.0.0", "expect": 1 },
+    { "a": "10.0.0", "b": "9.99.99", "expect": 1 },
+    { "a": "2.1", "b": "2.0.9", "expect": 1 },
+    { "a": "1.2.3", "b": "1.2.4", "expect": -1 },
+    { "a": "0.9.0", "b": "0.10.0", "expect": -1 },
+    { "a": "1.2.3.4", "b": "1.2.3", "expect": 1 },
+    { "a": "1.2.3.4", "b": "1.2.3.5", "expect": -1 },
+    { "a": "4.11.0.2", "b": "4.11.0.10", "expect": -1 },
+    { "a": "1.0.0.1", "b": "1.0.1", "expect": -1 },
+    { "a": "3.0.0-rc.1", "b": "3.0.0", "expect": -1 },
+    { "a": "3.0.0-alpha", "b": "3.0.0-alpha.1", "expect": -1 },
+    { "a": "3.0.0-alpha.1", "b": "3.0.0-alpha.beta", "expect": -1 },
+    { "a": "3.0.0-alpha.beta", "b": "3.0.0-beta", "expect": -1 },
+    { "a": "3.0.0-beta", "b": "3.0.0-beta.2", "expect": -1 },
+    { "a": "3.0.0-beta.2", "b": "3.0.0-beta.11", "expect": -1 },
+    { "a": "3.0.0-beta.11", "b": "3.0.0-rc.1", "expect": -1 },
+    { "a": "1.0.0-alpha", "b": "1.0.0-1", "expect": 1 },
+    { "a": "1.0.0-2", "b": "1.0.0-11", "expect": -1 },
+    { "a": "1.0.0-a.b", "b": "1.0.0-a", "expect": 1 },
+    { "a": "1.0.0-rc.10", "b": "1.0.0-rc.9", "expect": 1 }
+  ],
+  "evaluate": [
+    {
+      "name": "kill_global_beats_force",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "1.0.0" },
+      "expect": { "type": "kill", "message": "App unavailable" }
+    },
+    {
+      "name": "kill_beats_maintenance",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [],
+          "message_key": "kill_default"
+        },
+        "maintenance": {
+          "active": true,
+          "starts_at": null,
+          "ends_at": null,
+          "message_key": "maint_default",
+          "show_eta": true
+        }
+      },
+      "context": { "platform": "android", "appVersion": "3.4.0" },
+      "expect": { "type": "kill" }
+    },
+    {
+      "name": "kill_platform_scope_match",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": ["ios"],
+          "version_ranges": [],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "3.4.1" },
+      "expect": { "type": "kill" }
+    },
+    {
+      "name": "kill_platform_scope_other_platform_unaffected",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": ["ios"],
+          "version_ranges": [],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "android", "appVersion": "3.4.0" },
+      "expect": { "type": "none" }
+    },
+    {
+      "name": "kill_version_range_hit",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [{ "from": "3.0.0", "to": "3.2.0" }],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "3.1.5" },
+      "expect": { "type": "kill" }
+    },
+    {
+      "name": "kill_version_range_bounds_inclusive",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [{ "from": "3.0.0", "to": "3.2.0" }],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "3.2.0" },
+      "expect": { "type": "kill" }
+    },
+    {
+      "name": "kill_version_range_miss_falls_through_to_soft",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [{ "from": "3.0.0", "to": "3.2.0" }],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "3.3.0" },
+      "expect": { "type": "soft" }
+    },
+    {
+      "name": "kill_version_range_open_from",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [{ "to": "2.0.0" }],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "1.9.9" },
+      "expect": { "type": "kill" }
+    },
+    {
+      "name": "kill_custom_message_key",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [],
+          "message_key": "kill_ios_payment"
+        },
+        "messages": { "en": { "kill_ios_payment": "iOS payments are broken; we pulled the plug." } }
+      },
+      "context": { "platform": "ios", "appVersion": "3.4.1" },
+      "expect": { "type": "kill", "message": "iOS payments are broken; we pulled the plug." }
+    },
+    {
+      "name": "maintenance_beats_force",
+      "patch": {
+        "maintenance": {
+          "active": true,
+          "starts_at": null,
+          "ends_at": null,
+          "message_key": "maint_default",
+          "show_eta": true
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "1.0.0" },
+      "expect": { "type": "maintenance", "message": "Down for maintenance", "endsAt": null }
+    },
+    {
+      "name": "maintenance_eta_passthrough",
+      "patch": {
+        "maintenance": {
+          "active": true,
+          "starts_at": "2026-01-01T12:00:00Z",
+          "ends_at": "2026-01-01T15:00:00Z",
+          "message_key": "maint_default",
+          "show_eta": true
+        }
+      },
+      "context": { "platform": "android", "appVersion": "3.4.0" },
+      "expect": { "type": "maintenance", "endsAt": "2026-01-01T15:00:00Z", "showEta": true }
+    },
+    {
+      "name": "maintenance_show_eta_false",
+      "patch": {
+        "maintenance": {
+          "active": true,
+          "starts_at": null,
+          "ends_at": "2026-01-01T15:00:00Z",
+          "message_key": "maint_default",
+          "show_eta": false
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "3.4.1" },
+      "expect": { "type": "maintenance", "showEta": false }
+    },
+    {
+      "name": "maintenance_button_passthrough",
+      "patch": {
+        "maintenance": {
+          "active": true,
+          "starts_at": null,
+          "ends_at": null,
+          "message_key": "maint_default",
+          "show_eta": false,
+          "button_url": "https://status.ripstop.dev"
+        },
+        "messages": {
+          "en": {
+            "maint_default": "Down for maintenance",
+            "maint_title": "Scheduled maintenance",
+            "maint_button": "Check status"
+          }
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "3.4.1" },
+      "expect": {
+        "type": "maintenance",
+        "title": "Scheduled maintenance",
+        "buttonLabel": "Check status",
+        "buttonUrl": "https://status.ripstop.dev"
+      }
+    },
+    {
+      "name": "force_below_min",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "3.1.9" },
+      "expect": {
+        "type": "force",
+        "title": "Update required",
+        "body": "Please update",
+        "storeUrl": "https://store.example/ios"
+      }
+    },
+    {
+      "name": "version_equal_min_is_soft_not_force",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "3.2.0" },
+      "expect": { "type": "soft", "canSnooze": true }
+    },
+    {
+      "name": "soft_between_min_and_target",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "3.3.7" },
+      "expect": {
+        "type": "soft",
+        "title": "Update available",
+        "storeUrl": "https://store.example/ios"
+      }
+    },
+    {
+      "name": "target_reached_none",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "3.4.1" },
+      "expect": { "type": "none" }
+    },
+    {
+      "name": "above_target_none",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "9.0.0" },
+      "expect": { "type": "none" }
+    },
+    {
+      "name": "missing_platform_entry_none",
+      "patch": {
+        "update": {
+          "android": {
+            "min": "3.1.0",
+            "target": "3.4.0",
+            "store_url": "https://store.example/android",
+            "soft": { "max_snoozes": 3, "cooldown_hours": 24 }
+          }
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "1.0.0" },
+      "expect": { "type": "none" }
+    },
+    {
+      "name": "invalid_app_version_fails_open",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "not-a-version" },
+      "expect": { "type": "none" }
+    },
+    {
+      "name": "invalid_app_version_global_kill_still_kills",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "garbage" },
+      "expect": { "type": "kill" }
+    },
+    {
+      "name": "invalid_app_version_ranged_kill_does_not_match",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [{ "to": "9.9.9" }],
+          "message_key": "kill_default"
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "garbage" },
+      "expect": { "type": "none" }
+    },
+    {
+      "name": "locale_partial_falls_back_per_key",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "3.1.0", "locale": "tr" },
+      "expect": { "type": "force", "title": "Güncelleme gerekli", "body": "Please update" }
+    },
+    {
+      "name": "locale_unknown_falls_back_to_en",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "3.1.0", "locale": "ja" },
+      "expect": { "type": "force", "title": "Update required" }
+    },
+    {
+      "name": "missing_message_key_resolves_empty",
+      "patch": {
+        "kill": {
+          "active": true,
+          "platforms": [],
+          "version_ranges": [],
+          "message_key": "kill_default"
+        },
+        "messages": { "en": {} }
+      },
+      "context": { "platform": "ios", "appVersion": "3.4.1" },
+      "expect": { "type": "kill", "message": "" }
+    },
+    {
+      "name": "android_four_segment_below_min_forces",
+      "patch": {},
+      "context": { "platform": "android", "appVersion": "3.0.9.9" },
+      "expect": { "type": "force", "storeUrl": "https://store.example/android" }
+    },
+    {
+      "name": "android_four_segment_above_min_soft",
+      "patch": {},
+      "context": { "platform": "android", "appVersion": "3.1.0.1" },
+      "expect": { "type": "soft" }
+    },
+    {
+      "name": "prerelease_below_release_min_forces",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "3.2.0-rc.1" },
+      "expect": { "type": "force" }
+    },
+    {
+      "name": "build_metadata_ignored_equals_min",
+      "patch": {},
+      "context": { "platform": "ios", "appVersion": "3.2.0+45" },
+      "expect": { "type": "soft" }
+    },
+    {
+      "name": "missing_patch_segment_equals_min",
+      "patch": {
+        "update": {
+          "ios": {
+            "min": "3.2",
+            "target": "3.4.1",
+            "store_url": "https://store.example/ios",
+            "soft": { "max_snoozes": 3, "cooldown_hours": 24 }
+          }
+        }
+      },
+      "context": { "platform": "ios", "appVersion": "3.2.0" },
+      "expect": { "type": "soft" }
+    },
+    {
+      "name": "snooze_within_cooldown_suppresses",
+      "patch": {},
+      "context": {
+        "platform": "ios",
+        "appVersion": "3.3.0",
+        "snooze": { "count": 1, "hoursSinceLast": 5 }
+      },
+      "expect": { "type": "none" }
+    },
+    {
+      "name": "snooze_cooldown_elapsed_shows_again",
+      "patch": {},
+      "context": {
+        "platform": "ios",
+        "appVersion": "3.3.0",
+        "snooze": { "count": 1, "hoursSinceLast": 25 }
+      },
+      "expect": { "type": "soft", "canSnooze": true }
+    },
+    {
+      "name": "snooze_exhausted_shows_without_snooze_option",
+      "patch": {},
+      "context": {
+        "platform": "ios",
+        "appVersion": "3.3.0",
+        "snooze": { "count": 3, "hoursSinceLast": 30 }
+      },
+      "expect": { "type": "soft", "canSnooze": false }
+    }
+  ],
+  "config_source": [
+    { "fetch": "ok", "hasCache": false, "expect": "fresh" },
+    { "fetch": "ok", "hasCache": true, "expect": "fresh" },
+    { "fetch": "timeout", "hasCache": true, "expect": "cached" },
+    { "fetch": "timeout", "hasCache": false, "expect": "none" },
+    { "fetch": "http_error", "hasCache": true, "expect": "cached" },
+    { "fetch": "http_error", "hasCache": false, "expect": "none" },
+    { "fetch": "invalid_signature", "hasCache": true, "expect": "cached" },
+    { "fetch": "invalid_signature", "hasCache": false, "expect": "none" }
+  ]
+}

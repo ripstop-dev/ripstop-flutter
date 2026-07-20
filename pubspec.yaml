@@ -1,0 +1,27 @@
+name: ripstop
+description: Force update, kill switch, maintenance mode and remote config for Flutter apps — decided at the edge, verified on device.
+version: 0.1.0
+repository: https://github.com/ripstop-dev/ripstop-flutter
+issue_tracker: https://github.com/ripstop-dev/ripstop-flutter/issues
+documentation: https://ripstop.dev/docs/flutter
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The only three. Everything else — evaluation, version ordering, caching
+  # policy — is ours, because it is the protocol and must not drift.
+  http: ^1.2.0
+  cryptography: ^2.7.0      # Ed25519 verification, pure Dart
+  shared_preferences: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  assets: []

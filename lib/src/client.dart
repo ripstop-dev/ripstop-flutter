@@ -196,8 +196,9 @@ class Ripstop {
 
       final signature = response.headers['x-ripstop-sig'];
       final keyId = response.headers['x-ripstop-key-id'];
-      if (signature == null || keyId == null)
+      if (signature == null || keyId == null) {
         return FetchOutcome.invalidSignature;
+      }
 
       // The signature covers exactly these bytes. Decoding as UTF-8 rather
       // than using `response.body` avoids charset guessing changing them.

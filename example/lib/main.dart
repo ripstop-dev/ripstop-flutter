@@ -13,8 +13,13 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:ripstop/ripstop.dart';
 
+import 'demo_app.dart';
+
 /// Try: 'none', 'soft', 'force', 'kill', 'maintenance', 'offline'.
-const String scenario = 'soft';
+const String scenario = String.fromEnvironment(
+  'SCENARIO',
+  defaultValue: 'soft',
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +36,7 @@ Future<void> main() async {
 
   final ripstop = await Ripstop.init(
     apiKey: 'rs_pub_demo',
-    appVersion: '4.1.0',
+    appVersion: scenario == 'force' ? '3.9.1' : '4.1.0',
     platform: 'ios',
     signingKeys: stub.keys,
     storage: InMemoryStorage(),
@@ -45,52 +50,79 @@ Future<void> main() async {
       theme: ThemeData.dark(useMaterial3: true),
       home: RipstopShell(
         gate: ripstop,
-        theme: RsTheme.dark(),
-        child: DemoHome(gate: ripstop),
+        // A wall with nothing on it reads as a crash. The mark is small and
+        // quiet — enough to say "this screen is on purpose".
+        theme: RsTheme.dark().copyWith(logo: const _Mark()),
+        child: const DemoApp(),
       ),
     ),
   );
 }
 
-class DemoHome extends StatelessWidget {
-  const DemoHome({super.key, required this.gate});
+// ── a signed stub server, so the example needs no account ────────────────────
 
-  final Ripstop gate;
+/// Northwind's mark: a compass needle, north filled.
+///
+/// The customer's logo, not ours — but a wall carrying a letter in a rounded
+/// grey square looks like a missing asset, and these screenshots are the
+/// product's face. Drawn rather than shipped as an image so it stays sharp.
+class _Mark extends StatelessWidget {
+  const _Mark();
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Your app')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Text(
-                'This is your app, running normally.',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Scenario: $scenario · config source: ${gate.source.name}',
-                style: const TextStyle(fontSize: 13, color: Colors.white60),
-              ),
-              const SizedBox(height: 24),
-              // Remote config from the same signed payload — no second request.
-              Text(
-                'checkout_enabled = ${gate.values['checkout_enabled'] ?? '—'}',
-                style: const TextStyle(fontSize: 13, color: Colors.white60),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => const SizedBox(
+    width: 34,
+    height: 34,
+    child: CustomPaint(painter: _NorthwindPainter()),
+  );
 }
 
-// ── a signed stub server, so the example needs no account ────────────────────
+class _NorthwindPainter extends CustomPainter {
+  const _NorthwindPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centre = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2;
+
+    canvas.drawCircle(
+      centre,
+      r - 1,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..color = Colors.white.withValues(alpha: 0.22),
+    );
+
+    // The needle: north solid, south hollow — the shape every compass uses to
+    // say which way it is pointing.
+    final north = Path()
+      ..moveTo(centre.dx, centre.dy - r * 0.62)
+      ..lineTo(centre.dx + r * 0.26, centre.dy)
+      ..lineTo(centre.dx - r * 0.26, centre.dy)
+      ..close();
+    canvas.drawPath(
+      north,
+      Paint()..color = Colors.white.withValues(alpha: 0.92),
+    );
+
+    final south = Path()
+      ..moveTo(centre.dx, centre.dy + r * 0.62)
+      ..lineTo(centre.dx + r * 0.26, centre.dy)
+      ..lineTo(centre.dx - r * 0.26, centre.dy)
+      ..close();
+    canvas.drawPath(
+      south,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.3
+        ..color = Colors.white.withValues(alpha: 0.4),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_NorthwindPainter old) => false;
+}
 
 class _StubServer {
   _StubServer(this.client, this.keys);
@@ -162,8 +194,9 @@ Map<String, dynamic> _configFor(String scenario) => <String, dynamic>{
   },
   'update': <String, dynamic>{
     'ios': <String, dynamic>{
-      // 'force' puts the running 4.1.0 below min; 'soft' puts it between.
-      'min': scenario == 'force' ? '5.0.0' : '4.0.0',
+      // One honest rule for every scenario: the running version is what
+      // changes. 3.9.1 is below the minimum, 4.1.0 sits between the two.
+      'min': '4.0.0',
       'target': scenario == 'none' ? '4.0.0' : '4.2.0',
       'store_url': 'https://apps.apple.com/app/id000000',
       'soft': <String, dynamic>{'max_snoozes': 3, 'cooldown_hours': 24},
@@ -172,15 +205,19 @@ Map<String, dynamic> _configFor(String scenario) => <String, dynamic>{
   'values': <String, dynamic>{'checkout_enabled': true},
   'messages': <String, dynamic>{
     'en': <String, dynamic>{
-      'force_title': 'Update required',
+      'force_title': 'This version can’t reach us any more',
       'force_body':
-          'This version can no longer talk to our servers. '
-          'Update to keep using the app.',
-      'soft_title': 'A new version is ready',
-      'soft_body': 'It is faster, and fixes the bug you hit last week.',
-      'kill_default': 'This version has been withdrawn.',
-      'maint_title': 'Back shortly',
-      'maint_default': 'We are doing some maintenance. Nothing is lost.',
+          'We changed something on our side that 3.9 can’t speak to. '
+          'The update takes a few seconds.',
+      'soft_title': 'A faster version is ready',
+      'soft_body':
+          'Fixes the sync bug you hit last week, and starts about twice as '
+          'fast.',
+      'kill_default': 'We’ve pulled this version',
+      'maint_title': 'We’re moving some things around',
+      'maint_default':
+          'Back shortly. Nothing you’ve saved is affected — this is planned, '
+          'and short.',
       'maint_button': 'Check status',
     },
   },

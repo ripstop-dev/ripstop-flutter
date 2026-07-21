@@ -112,7 +112,7 @@ void main() {
     expect(find.text('Update available'), findsOneWidget);
     expect(find.text('THE APP'), findsOneWidget,
         reason: 'a nudge is a favour we are asking, not a gate');
-    expect(find.text('Later'), findsOneWidget);
+    expect(find.text('Not now'), findsOneWidget);
   });
 
   testWidgets('snoozing dismisses the prompt and reveals the app',
@@ -121,7 +121,7 @@ void main() {
     await tester.pumpWidget(_app(gate));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Later'));
+    await tester.tap(find.text('Not now'));
     await tester.pumpAndSettle();
 
     expect(find.text('Update available'), findsNothing);

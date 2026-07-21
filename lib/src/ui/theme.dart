@@ -37,6 +37,13 @@ class RsTheme {
   final double buttonRadius;
   final double maxContentWidth;
 
+  /// The pip beside "you" on the version ladder, and the wash behind a
+  /// required update. Defaults to the accent so a themed wall stays coherent.
+  Color get accentPip => const Color(0xFFFF453A);
+
+  /// Reserved for the two screens that mean something has gone wrong.
+  Color get dangerPip => const Color(0xFFFF453A);
+
   factory RsTheme.dark() => const RsTheme(
         background: Color(0xFF0B0B0D),
         foreground: Color(0xFFF2F2F3),

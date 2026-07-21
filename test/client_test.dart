@@ -274,4 +274,48 @@ void main() {
     expect(decision, isA<RsSoftUpdate>());
     expect((decision as RsSoftUpdate).canSnooze, true);
   });
+
+  test('every check carries the install id, and it survives restarts', () async {
+    final storage = InMemoryStorage();
+    final client = _StubClient((_) => sign(_config()));
+    final gate = await boot(client, storage: storage);
+
+    final sent = client.seenHeaders.single['x-ripstop-device'];
+    expect(sent, gate.installId);
+    // 128 bits hex — long enough to never collide, nothing device-derived.
+    expect(sent, hasLength(32));
+
+    // A second boot on the same storage is the same install, not a new row.
+    final again = await boot(_StubClient((_) => sign(_config())), storage: storage);
+    expect(again.installId, gate.installId);
+
+    // A different storage is a reinstall: new id by design.
+    final fresh = await boot(_StubClient((_) => sign(_config())));
+    expect(fresh.installId, isNot(gate.installId));
+  });
+
+  test('userId is absent until set, then sent and persisted', () async {
+    final storage = InMemoryStorage();
+    final first = _StubClient((_) => sign(_config()));
+    final gate = await boot(first, storage: storage);
+    expect(first.seenHeaders.single.containsKey('x-ripstop-user'), false);
+
+    gate.userId = 'customer-42';
+    await gate.refresh(force: true);
+    expect(first.seenHeaders.last['x-ripstop-user'], 'customer-42');
+
+    // Next launch reads it back without the host app setting it again. The
+    // cache is still fresh so boot itself makes no request — force one to see
+    // what a real check would carry.
+    final second = _StubClient((_) => sign(_config()));
+    final rebooted = await boot(second, storage: storage);
+    expect(rebooted.userId, 'customer-42');
+    await rebooted.refresh(force: true);
+    expect(second.seenHeaders.last['x-ripstop-user'], 'customer-42');
+
+    // Clearing it stops the header, not just the value.
+    rebooted.userId = null;
+    await rebooted.refresh(force: true);
+    expect(second.seenHeaders.last.containsKey('x-ripstop-user'), false);
+  });
 }

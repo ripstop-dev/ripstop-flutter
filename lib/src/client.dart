@@ -10,6 +10,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'dart:math' show Random;
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -70,11 +71,37 @@ class Ripstop {
 
   RipstopConfig? _config;
   ConfigSource _source = ConfigSource.none;
+  late final String _installId;
+  String? _userId;
+
+  /// The id this install is known by in the panel's Users view. Random,
+  /// minted on first launch, persisted alongside the cache.
+  String get installId => _installId;
+
+  /// Your own id for this user, if you have one — shown in the panel next to
+  /// ours so a support thread can find the right install. Persisted, and sent
+  /// from the next check onwards; set it to null to stop sending it.
+  String? get userId => _userId;
+
+  set userId(String? id) {
+    _userId = id;
+    // Fire-and-forget: identity is advisory metadata, and a failed write only
+    // costs the label until the next launch — never a decision.
+    unawaited(_store.writeUserId(id));
+  }
 
   /// Everything the panel published under `values`, from the payload currently
   /// driving decisions. Empty until the first successful check.
   Map<String, dynamic> get values =>
       _config?.values ?? const <String, dynamic>{};
+
+  /// The rule in force for this platform, if there is one.
+  ///
+  /// Exposed so a wall can show the user where they actually stand — the
+  /// version they are on, the one that unblocks them, the newest one. That
+  /// turns "you are too old" into something they can check themselves
+  /// against, rather than a refusal they have to take on faith.
+  UpdateEntry? get rule => _config?.update[platform];
 
   ConfigSource get source => _source;
 
@@ -108,8 +135,18 @@ class Ripstop {
       endpoint: endpoint,
       httpClient: httpClient ?? http.Client(),
     );
+    instance._installId = await instance._store.readOrMintInstallId(_mintId);
+    instance._userId = await instance._store.readUserId();
     await instance.refresh();
     return instance;
+  }
+
+  /// 128 bits of `Random.secure()`, hex-encoded. Enough that two installs
+  /// never collide, and carrying nothing that describes the device.
+  static String _mintId() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 
   static String _detectPlatform() {
@@ -174,6 +211,11 @@ class Ripstop {
           if (cached?.etag != null) 'if-none-match': cached!.etag!,
           'x-ripstop-platform': platform,
           'x-ripstop-app-version': appVersion,
+          // What the panel's Users view is built from. The install id is a
+          // random mint (see _mintId); the user id is whatever the host app
+          // chose to set, and absent otherwise.
+          'x-ripstop-device': _installId,
+          if (_userId != null && _userId!.isNotEmpty) 'x-ripstop-user': _userId!,
         },
       ).timeout(timeout);
 

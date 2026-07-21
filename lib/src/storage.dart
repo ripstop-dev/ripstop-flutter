@@ -131,6 +131,26 @@ class ConfigStore {
 
   String get _configKey => 'ripstop.config.$apiKey';
   String get _snoozeKey => 'ripstop.snooze.$apiKey';
+  String get _installKey => 'ripstop.install.$apiKey';
+  String get _userKey => 'ripstop.user.$apiKey';
+
+  /// The id this install is known by in the panel's Users view.
+  ///
+  /// Minted once, here, and never derived from the device: a random value
+  /// names *an install of this app* and nothing else. Reinstalling mints a new
+  /// one, which is the honest behaviour — a fresh install is a fresh row.
+  Future<String> readOrMintInstallId(String Function() mint) async {
+    final existing = await storage.read(_installKey);
+    if (existing != null && existing.isNotEmpty) return existing;
+    final minted = mint();
+    await storage.write(_installKey, minted);
+    return minted;
+  }
+
+  Future<String?> readUserId() => storage.read(_userKey);
+
+  Future<void> writeUserId(String? id) =>
+      id == null ? storage.delete(_userKey) : storage.write(_userKey, id);
 
   Future<CachedConfig?> readConfig() async {
     final raw = await storage.read(_configKey);
